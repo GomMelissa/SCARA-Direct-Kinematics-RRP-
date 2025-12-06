@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCARA Multi-Rutina</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #eef2f3; text-align: center; padding: 10px; }
+        .container { max-width: 650px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .panel { border: 1px solid #ddd; padding: 10px; border-radius: 10px; margin-bottom: 15px; background: #fafafa; }
+        
+        input[type=number] { padding: 5px; width: 70px; text-align: center; }
+        input[type=range] { width: 100%; cursor: pointer; margin: 10px 0; }
+        
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; margin: 3px; font-weight: bold;}
+        .btn:hover { opacity: 0.9; transform: scale(1.05); transition: 0.2s; }
+        
+        .btn-green { background: #27ae60; }
+        .btn-blue { background: #2980b9; }
+        .btn-red { background: #c0392b; }
+        .btn-gold { background: #f1c40f; color: #333; }
+        .btn-dark { background: #2c3e50; }
+
+        /* Estilo para el selector de cubos */
+        .cubo-selector { display: flex; justify-content: space-around; margin-bottom: 10px; }
+        .cubo-btn { width: 30%; padding: 10px; background: #ddd; border: none; cursor: pointer; border-radius: 5px; }
+        .cubo-btn.active { background: #3498db; color: white; border: 2px solid #2980b9; }
+
+        label { font-size: 0.9em; font-weight: bold; color: #555; display: block; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="color: #2c3e50; margin-top:0;">🤖 SCARA - 3 Cubos</h2>
+
+    <div class="panel">
+        <label>📍 Cinemática Inversa</label>
+        <input type="number" id="coordX" placeholder="X" step="0.5">
+        <input type="number" id="coordY" placeholder="Y" step="0.5">
+        <button class="btn btn-green" onclick="enviarCoordenadas()">IR</button>
+        <span id="statusMsg" style="font-size: 0.8em; color:#e67e22;"></span>
+    </div>
+
+    <div class="panel">
+        <label>Hombro: <span id="valHombro">90</span>° | Codo: <span id="valCodo">90</span>°</label>
+        <input type="range" min="0" max="180" value="90" id="rangeHombro" onchange="moverManual('hombro', this.value)">
+        <input type="range" min="0" max="180" value="90" id="rangeCodo" onchange="moverManual('codo', this.value)">
+
+        <label>↕️ Cremallera: <span id="valAlt">0</span> | 🧲 Imán</label>
+        <div style="display:flex; align-items: center;">
+            <input type="range" min="0" max="180" value="0" style="flex:1;" onchange="moverManual('altura', this.value)">
+            <button class="btn btn-red" onclick="moverManual('iman', 1)">ON</button>
+            <button class="btn btn-blue" onclick="moverManual('iman', 0)">OFF</button>
+        </div>
+        <div style="font-size:0.8em; color:#7f8c8d;">Pos: X=<span id="currentX">--</span>, Y=<span id="currentY">--</span></div>
+    </div>
+
+    <div class="panel" style="border: 2px solid #3498db; background: #eaf2f8;">
+        <h3>📦 Configuración de Rutinas</h3>
+        
+        <div class="cubo-selector">
+            <button class="cubo-btn active" id="btnC1" onclick="seleccionarCubo(1)">CUBO 1</button>
+            <button class="cubo-btn" id="btnC2" onclick="seleccionarCubo(2)">CUBO 2</button>
+            <button class="cubo-btn" id="btnC3" onclick="seleccionarCubo(3)">CUBO 3</button>
+        </div>
+
+        <p style="font-size:0.9em; margin:5px;">Editando: <b id="cuboLabel" style="color:#2980b9;">CUBO 1</b></p>
+        
+        <button class="btn btn-blue" onclick="guardar('pick')">📍 GUARDAR PICK</button>
+        <button class="btn btn-red" onclick="guardar('place')">📍 GUARDAR PLACE</button>
+        <button class="btn btn-gold" onclick="ejecutarUno()">▶ PROBAR ESTE CUBO</button>
+        
+        <hr>
+        <button class="btn btn-dark" style="width:100%; padding: 15px; font-size:1.1em;" onclick="ejecutarTodo()">🚀 EJECUTAR LOS 3 SEGUIDOS</button>
+        <div id="rutinaMsg" style="margin-top:5px; font-weight:bold;"></div>
+    </div>
+</div>
+
+<script>
+    let cuboActivo = 1;
+
+    function seleccionarCubo(num) {
+        cuboActivo = num;
+        document.querySelectorAll('.cubo-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btnC' + num).classList.add('active');
+        document.getElementById('cuboLabel').innerText = "CUBO " + num;
+        document.getElementById('rutinaMsg').innerText = "Cambiado a Cubo " + num;
+    }
+
+    async function enviarCoordenadas() {
+        let x = document.getElementById('coordX').value;
+        let y = document.getElementById('coordY').value;
+        await fetch('/mover_coordenada', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ x: x, y: y })
+        }).then(r => r.json()).then(d => {
+            if(d.status==='ok') {
+                document.getElementById('statusMsg').innerText = "OK";
+                document.getElementById('rangeHombro').value = d.hombro;
+                document.getElementById('rangeCodo').value = d.codo;
+                document.getElementById('valHombro').innerText = d.hombro;
+                document.getElementById('valCodo').innerText = d.codo;
+            } else document.getElementById('statusMsg').innerText = d.msg;
+        });
+    }
+
+    async function moverManual(motor, valor) {
+        if(motor==='hombro') document.getElementById('valHombro').innerText=valor;
+        if(motor==='codo') document.getElementById('valCodo').innerText=valor;
+        if(motor==='altura') document.getElementById('valAlt').innerText=valor;
+
+        await fetch('/control_manual', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ motor: motor, valor: valor })
+        }).then(r => r.json()).then(d => {
+            if(d.status==='ok' && d.x) {
+                document.getElementById('currentX').innerText = d.x;
+                document.getElementById('currentY').innerText = d.y;
+            }
+        });
+    }
+
+    async function guardar(tipo) {
+        const res = await fetch('/guardar_posicion', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ cubo: cuboActivo, tipo: tipo })
+        });
+        const d = await res.json();
+        document.getElementById('rutinaMsg').innerText = d.msg;
+        document.getElementById('rutinaMsg').style.color = "blue";
+    }
+
+    async function ejecutarUno() {
+        document.getElementById('rutinaMsg').innerText = "⏳ Probando Cubo " + cuboActivo + "...";
+        const res = await fetch('/ejecutar_rutina', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ modo: cuboActivo })
+        });
+        const d = await res.json();
+        document.getElementById('rutinaMsg').innerText = d.msg;
+    }
+
+    async function ejecutarTodo() {
+        document.getElementById('rutinaMsg').innerText = "🚀 Ejecutando SECUENCIA MAESTRA... ¡Aléjate!";
+        document.getElementById('rutinaMsg').style.color = "#c0392b";
+        const res = await fetch('/ejecutar_rutina', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ modo: 'todo' })
+        });
+        const d = await res.json();
+        document.getElementById('rutinaMsg').innerText = d.msg;
+        document.getElementById('rutinaMsg').style.color = "green";
+    }
+</script>
+
+</body>
+</html>
