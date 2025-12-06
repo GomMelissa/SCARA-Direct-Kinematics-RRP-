@@ -15,7 +15,7 @@ media/evidence.gif: GIF de evidencia mostrando la ejecución y el movimiento fí
 
 tests_results.csv: Tabla con los casos de prueba y resultados.
 
-Requerimientos
+- Requerimientos
 
 Python 3.9 
 
